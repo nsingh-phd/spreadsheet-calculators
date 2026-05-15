@@ -75,7 +75,7 @@ THIN_BORDER = Border(
 )
 
 # Currency and date formats
-CURRENCY_FMT = '#,##0.00'
+CURRENCY_FMT = '$#,##0.00'
 PERCENT_FMT = '0.000%'
 DATE_FMT = 'MMM YYYY'
 NUMBER_FMT = '#,##0'
@@ -115,13 +115,13 @@ def create_workbook():
     ac = get_column_letter  # shorthand
     PAY_NUM_COL = AC       # H - Payment #
     DATE_COL = AC + 1      # I - Date
-    PAYMENT_COL = AC + 2   # J - Payment
-    INTEREST_COL = AC + 3  # K - Interest
-    PRINCIPAL_COL = AC + 4 # L - Principal
-    END_BAL_COL = AC + 5   # M - Ending Balance
+    INTEREST_COL = AC + 2  # J - Interest
+    PRINCIPAL_COL = AC + 3 # K - Principal
+    END_BAL_COL = AC + 4   # L - Ending Balance
+    PAYMENT_COL = AC + 5   # M - Payment (hidden, used by formulas)
     CUM_PRINCIPAL_COL = AC + 6  # N - Cumulative Principal (hidden)
     CUM_INTEREST_COL = AC + 7   # O - Cumulative Interest (hidden)
-    NUM_AMORT_COLS = 6  # visible columns only
+    NUM_AMORT_COLS = 5  # visible columns only
 
     # -----------------------------------------------------------------------
     # A. LOAN DETAILS (left panel, rows 1-6)
@@ -151,6 +151,10 @@ def create_workbook():
     ws.cell(row=6, column=2).font = Font(bold=True, color="006600")
     ws.cell(row=6, column=2).border = THIN_BORDER
 
+    # Right-justify all numeric values in Loan Details
+    for r in range(2, 7):
+        ws.cell(row=r, column=2).alignment = Alignment(horizontal="right")
+
     add_named_range(wb, "LoanAmount", "Calculator!$B$2")
     add_named_range(wb, "AnnualRate", "Calculator!$B$3")
     add_named_range(wb, "TermYears", "Calculator!$B$4")
@@ -178,7 +182,7 @@ def create_workbook():
         (12, "Original Total Interest"),
         (13, "Accelerated Total Interest"),
         (14, "Interest Saved"),
-        (15, "Months Saved"),
+        (15, "Payoff Time Saved"),
         (16, "Total of Payments (P+I)"),
         (17, "Total Extra Payments"),
     ]
@@ -211,9 +215,9 @@ def create_workbook():
     ws.cell(row=14, column=vc).number_format = CURRENCY_FMT
     ws.cell(row=14, column=vc).font = Font(bold=True, color="006600", size=12)
 
+    months_saved = f'(TermYears*12-SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END}))))'
     ws.cell(row=15, column=vc,
-            value=f'=TermYears*12-SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END})))')
-    ws.cell(row=15, column=vc).number_format = NUMBER_FMT
+            value=f'=INT({months_saved}/12)&" years, "&MOD({months_saved},12)&" months"')
     ws.cell(row=15, column=vc).font = Font(bold=True, color="006600", size=12)
 
     ws.cell(row=16, column=vc,
@@ -227,7 +231,7 @@ def create_workbook():
     for row_num in range(9, 18):
         cell = ws.cell(row=row_num, column=vc)
         cell.border = THIN_BORDER
-        cell.alignment = Alignment(horizontal="center")
+        cell.alignment = Alignment(horizontal="right")
 
     # -----------------------------------------------------------------------
     # C. RECURRING EXTRA PAYMENTS (left panel, rows 19-30)
@@ -284,7 +288,7 @@ def create_workbook():
     ws.merge_cells(f"{ac(AC)}1:{ac(AC + NUM_AMORT_COLS - 1)}1")
     ws.cell(row=1, column=AC, value="AMORTIZATION SCHEDULE").font = SECTION_FONT
 
-    amort_headers = ["Payment #", "Date", "Payment", "Interest", "Principal", "Ending Balance"]
+    amort_headers = ["Payment #", "Date", "Interest", "Principal", "Ending Balance"]
     for i, h in enumerate(amort_headers):
         ws.cell(row=AMORT_HEADER_ROW, column=AC + i, value=h)
     style_header_row_range(ws, AMORT_HEADER_ROW, AC, AC + NUM_AMORT_COLS - 1)
@@ -292,6 +296,7 @@ def create_workbook():
     # Hidden cumulative columns for chart (headers only for Reference titles_from_data)
     cp = ac(CUM_PRINCIPAL_COL)  # N
     ci = ac(CUM_INTEREST_COL)   # O
+    ws.cell(row=AMORT_HEADER_ROW, column=PAYMENT_COL, value="Payment")
     ws.cell(row=AMORT_HEADER_ROW, column=CUM_PRINCIPAL_COL, value="Cumul. Principal")
     ws.cell(row=AMORT_HEADER_ROW, column=CUM_INTEREST_COL, value="Cumul. Interest")
 
@@ -416,15 +421,15 @@ def create_workbook():
         7: 3,    # G - spacer
         8: 12,   # H - payment #
         9: 14,   # I - date
-        10: 16,  # J - payment
-        11: 16,  # K - interest
-        12: 16,  # L - principal
-        13: 18,  # M - ending balance
+        10: 16,  # J - interest
+        11: 16,  # K - principal
+        12: 18,  # L - ending balance
     }
     for col, width in col_widths.items():
         ws.column_dimensions[get_column_letter(col)].width = width
 
-    # Hide cumulative columns (used only by chart)
+    # Hide Payment and cumulative columns (used only by formulas/charts)
+    ws.column_dimensions[ac(PAYMENT_COL)].width = 0.5
     ws.column_dimensions[ac(CUM_PRINCIPAL_COL)].width = 0.5
     ws.column_dimensions[ac(CUM_INTEREST_COL)].width = 0.5
 
@@ -560,7 +565,7 @@ def main():
     print(f"   - Loan details: B2–B5")
     print(f"   - Recurring extra payments: rows {RECURRING_DATA_START}–{RECURRING_DATA_END} (cols B-E)")
     print(f"   - One-time extra payments: rows {ONETIME_DATA_START}–{ONETIME_DATA_END} (cols B-C)")
-    print(f"   - Amortization schedule: columns H-M")
+    print(f"   - Amortization schedule: columns H-L")
 
 
 if __name__ == "__main__":
