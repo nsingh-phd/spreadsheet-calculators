@@ -482,7 +482,7 @@ def create_workbook():
     pie.series[0].dLbls.showVal = False
     pie.series[0].dLbls.showSerName = False
 
-    ws.add_chart(pie, f"{ac(CHART_COL + 1)}1")
+    ws.add_chart(pie, f"{ac(CHART_COL + 1)}4")
 
     # -- LINE CHART: Principal, Interest, Balance over time --
     line = LineChart()
@@ -544,7 +544,7 @@ def create_workbook():
     line.x_axis.majorGridlines = ChartLines(spPr=faint_props)
 
     # Place line chart below pie chart
-    ws.add_chart(line, f"{ac(CHART_COL + 1)}19")
+    ws.add_chart(line, f"{ac(CHART_COL + 1)}22")
 
     return wb, ws
 
