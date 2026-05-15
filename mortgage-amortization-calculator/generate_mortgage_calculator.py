@@ -544,7 +544,7 @@ def create_workbook():
     line.x_axis.majorGridlines = ChartLines(spPr=faint_props)
 
     # Place line chart below pie chart
-    ws.add_chart(line, f"{ac(CHART_COL + 1)}14")
+    ws.add_chart(line, f"{ac(CHART_COL + 1)}19")
 
     return wb, ws
 
