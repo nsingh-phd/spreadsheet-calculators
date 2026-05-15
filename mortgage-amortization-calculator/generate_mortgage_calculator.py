@@ -24,7 +24,6 @@ from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.chart import PieChart, LineChart, Reference
 from openpyxl.chart.series import DataPoint
 from openpyxl.chart.label import DataLabelList
-from openpyxl.utils.units import cm_to_EMU
 from copy import copy
 
 
@@ -406,10 +405,13 @@ def create_workbook():
     # G. CHARTS (far right, starting at column O)
     # -----------------------------------------------------------------------
     CHART_COL = AC + NUM_AMORT_COLS + 2  # Column O (15)
-    chart_col_letter = ac(CHART_COL)
 
-    # -- Pie chart helper data (hidden area for pie chart labels/values) --
-    # Place in column N (14) which is just after amort table
+    # ggplot2-inspired soft colors
+    SOFT_BLUE = "619CFF"    # principal
+    SOFT_RED = "F8766D"     # interest
+    SOFT_GREEN = "00BA38"   # balance
+
+    # -- Pie chart helper data (hidden area) --
     HELPER_COL = AC + NUM_AMORT_COLS + 1  # N (14)
     hc = ac(HELPER_COL)
     ws.cell(row=1, column=HELPER_COL, value="Category").font = Font(color="FFFFFF", size=1)
@@ -420,7 +422,6 @@ def create_workbook():
     ws.cell(row=2, column=HELPER_COL + 1).font = Font(color="FFFFFF", size=1)
     ws.cell(row=3, column=HELPER_COL + 1, value="=B13")
     ws.cell(row=3, column=HELPER_COL + 1).font = Font(color="FFFFFF", size=1)
-    # Hide helper column
     ws.column_dimensions[hc].width = 0.5
     ws.column_dimensions[ac(HELPER_COL + 1)].width = 0.5
 
@@ -428,29 +429,28 @@ def create_workbook():
     pie = PieChart()
     pie.title = "Principal vs Interest"
     pie.style = 10
-    pie.width = 18
-    pie.height = 14
+    pie.width = 14
+    pie.height = 11
 
-    labels = Reference(ws, min_col=HELPER_COL, min_row=2, max_row=3)
+    labels_ref = Reference(ws, min_col=HELPER_COL, min_row=2, max_row=3)
     data = Reference(ws, min_col=HELPER_COL + 1, min_row=1, max_row=3)
     pie.add_data(data, titles_from_data=True)
-    pie.set_categories(labels)
+    pie.set_categories(labels_ref)
 
-    # Colors: blue for principal, red for interest
-    from openpyxl.chart.series import DataPoint
-    from openpyxl.drawing.fill import PatternFillProperties, ColorChoice
+    # Soft colors
     pt_principal = DataPoint(idx=0)
-    pt_principal.graphicalProperties.solidFill = "2F5496"
+    pt_principal.graphicalProperties.solidFill = SOFT_BLUE
     pie.series[0].data_points.append(pt_principal)
     pt_interest = DataPoint(idx=1)
-    pt_interest.graphicalProperties.solidFill = "C00000"
+    pt_interest.graphicalProperties.solidFill = SOFT_RED
     pie.series[0].data_points.append(pt_interest)
 
-    # Show percentage labels
+    # No text labels inside pie — legend only
     pie.series[0].dLbls = DataLabelList()
-    pie.series[0].dLbls.showPercent = True
-    pie.series[0].dLbls.showCatName = True
+    pie.series[0].dLbls.showPercent = False
+    pie.series[0].dLbls.showCatName = False
     pie.series[0].dLbls.showVal = False
+    pie.series[0].dLbls.showSerName = False
 
     ws.add_chart(pie, f"{ac(CHART_COL + 1)}1")
 
@@ -458,17 +458,22 @@ def create_workbook():
     line = LineChart()
     line.title = "Loan Amortization Over Time"
     line.style = 10
-    line.width = 28
-    line.height = 16
-    line.y_axis.title = "Dollars ($)"
-    line.x_axis.title = "Year"
-    line.y_axis.numFmt = '#,##0'
+    line.width = 22
+    line.height = 13
+
+    # No axis titles
+    line.y_axis.title = None
+    line.x_axis.title = None
+
+    # Y-axis: dollar format like $300K
+    line.y_axis.numFmt = '$#,##0,K'
+    line.y_axis.number_format = '$#,##0,K'
 
     # Categories: dates (col I)
     cats = Reference(ws, min_col=DATE_COL, min_row=AMORT_DATA_START,
                      max_row=AMORT_DATA_END)
 
-    # Series: Principal (col L), Interest (col K), Balance (col M)
+    # Series data
     principal_data = Reference(ws, min_col=PRINCIPAL_COL,
                                min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
     interest_data = Reference(ws, min_col=INTEREST_COL,
@@ -481,24 +486,33 @@ def create_workbook():
     line.add_data(balance_data, titles_from_data=True)
     line.set_categories(cats)
 
-    # Colors matching pie chart + green for balance
-    line.series[0].graphicalProperties.line.solidFill = "2F5496"  # Principal - blue
-    line.series[1].graphicalProperties.line.solidFill = "C00000"  # Interest - red
-    line.series[2].graphicalProperties.line.solidFill = "006600"  # Balance - green
+    # Soft colors matching pie + green for balance, wider lines
+    line.series[0].graphicalProperties.line.solidFill = SOFT_BLUE
+    line.series[1].graphicalProperties.line.solidFill = SOFT_RED
+    line.series[2].graphicalProperties.line.solidFill = SOFT_GREEN
 
-    # Line width
     for s in line.series:
-        s.graphicalProperties.line.width = 20000  # EMUs (~1.5pt)
+        s.graphicalProperties.line.width = 28000  # ~2.2pt
         s.smooth = False
 
-    # X-axis: show dates as years
+    # X-axis: years
     line.x_axis.numFmt = 'YYYY'
     line.x_axis.majorTimeUnit = "years"
     line.x_axis.number_format = 'YYYY'
     line.x_axis.tickLblPos = "low"
     line.x_axis.delete = False
+    # Very faint gray gridlines
+    from openpyxl.drawing.line import LineProperties
+    from openpyxl.chart.axis import ChartLines
+    from openpyxl.drawing.fill import GradientFillProperties
+    faint_gray_lp = LineProperties(solidFill="E0E0E0", w=6350)
+    from openpyxl.chart.shapes import GraphicalProperties
+    faint_props = GraphicalProperties(ln=faint_gray_lp)
+    line.y_axis.majorGridlines = ChartLines(spPr=faint_props)
+    line.x_axis.majorGridlines = ChartLines(spPr=faint_props)
 
-    ws.add_chart(line, f"{ac(CHART_COL + 1)}16")
+    # Place line chart below pie chart
+    ws.add_chart(line, f"{ac(CHART_COL + 1)}14")
 
     return wb, ws
 
