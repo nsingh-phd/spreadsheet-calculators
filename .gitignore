@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Excel lock files
+~$*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
