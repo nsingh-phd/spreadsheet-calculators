@@ -566,10 +566,18 @@ def create_workbook():
 def main():
     wb, ws = create_workbook()
 
-    # Save
-    output_path = os.path.join(os.path.dirname(__file__), "mortgage_amortization_calculator.xlsx")
+    # Save template (tracked by git)
+    base_dir = os.path.dirname(__file__)
+    output_path = os.path.join(base_dir, "mortgage_amortization_calculator.xlsx")
     wb.save(output_path)
-    print(f"✅ Mortgage calculator generated: {output_path}")
+
+    # Save local copy (gitignored, for personal use)
+    local_path = os.path.join(base_dir, "mortgage_amortization_calculator_local.xlsx")
+    wb.save(local_path)
+
+    print(f"✅ Mortgage calculator generated:")
+    print(f"   {output_path}")
+    print(f"   {local_path} (local, gitignored)")
     print(f"   Open in Excel and edit the yellow input cells.")
     print(f"   - Loan details: B2–B5")
     print(f"   - Recurring extra payments: rows {RECURRING_DATA_START}–{RECURRING_DATA_END} (cols B-E)")

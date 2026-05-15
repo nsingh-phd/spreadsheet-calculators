@@ -8,3 +8,6 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Local Excel files (personal use, not tracked)
+*_local.xlsx
