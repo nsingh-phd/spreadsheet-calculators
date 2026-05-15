@@ -41,19 +41,19 @@ NUM_ONETIME = 15
 
 # Left panel layout rows (1-indexed)
 INPUT_START_ROW = 2
-SUMMARY_HEADER_ROW = 8
-SUMMARY_DATA_START = 9
-SUMMARY_DATA_END = 17
+SUMMARY_HEADER_ROW = 9
+SUMMARY_DATA_START = 10
+SUMMARY_DATA_END = 18
 
-RECURRING_SECTION_ROW = 19
-RECURRING_HEADER_ROW = 20
-RECURRING_DATA_START = 21
-RECURRING_DATA_END = RECURRING_DATA_START + NUM_RECURRING - 1  # 30
+RECURRING_SECTION_ROW = 20
+RECURRING_HEADER_ROW = 21
+RECURRING_DATA_START = 22
+RECURRING_DATA_END = RECURRING_DATA_START + NUM_RECURRING - 1  # 31
 
-ONETIME_SECTION_ROW = 32
-ONETIME_HEADER_ROW = 33
-ONETIME_DATA_START = 34
-ONETIME_DATA_END = ONETIME_DATA_START + NUM_ONETIME - 1  # 48
+ONETIME_SECTION_ROW = 33
+ONETIME_HEADER_ROW = 34
+ONETIME_DATA_START = 35
+ONETIME_DATA_END = ONETIME_DATA_START + NUM_ONETIME - 1  # 49
 
 # Right panel: amortization schedule (starts at column H)
 AMORT_COL = 8  # Column H
@@ -134,7 +134,7 @@ def create_workbook():
         (3, "Annual Interest Rate"),
         (4, "Loan Term (years)"),
         (5, "Start Date"),
-        (6, "Min Monthly Payment"),
+        (6, "Base Monthly Payment"),
         (7, "Current Monthly Payment"),
     ]
     for row_num, label in labels:
@@ -171,9 +171,9 @@ def create_workbook():
     add_named_range(wb, "MonthlyPmt", "Calculator!$B$6")
 
     # -----------------------------------------------------------------------
-    # B. LOAN SUMMARY (left panel, rows 8-17)
+    # B. LOAN SUMMARY (left panel, rows 9-18)
     # -----------------------------------------------------------------------
-    ws.merge_cells("A8:B8")
+    ws.merge_cells("A9:B9")
     ws.cell(row=SUMMARY_HEADER_ROW, column=1, value="LOAN SUMMARY").font = SECTION_FONT
 
     # Amort column letter references for summary formulas
@@ -185,15 +185,15 @@ def create_workbook():
     eb = ac(END_BAL_COL)    # M
 
     summary_items = [
-        (9,  "Original Payoff Date"),
-        (10, "Accelerated Payoff Date"),
-        (11, "Accelerated Payoff Time"),
-        (12, "Original Total Interest"),
-        (13, "Accelerated Total Interest"),
-        (14, "Interest Saved"),
-        (15, "Payoff Time Saved"),
-        (16, "Total of Payments (P+I)"),
-        (17, "Total Extra Payments"),
+        (10, "Original Payoff Date"),
+        (11, "Accelerated Payoff Date"),
+        (12, "Accelerated Payoff Time"),
+        (13, "Original Total Interest"),
+        (14, "Accelerated Total Interest"),
+        (15, "Interest Saved"),
+        (16, "Payoff Time Saved"),
+        (17, "Total of Payments (P+I)"),
+        (18, "Total Extra Payments"),
     ]
     for row_num, label in summary_items:
         cell = ws.cell(row=row_num, column=1, value=label)
@@ -202,42 +202,42 @@ def create_workbook():
 
     vc = 2  # value column B
 
-    ws.cell(row=9, column=vc, value='=EDATE(StartDate,TermYears*12-1)')
-    ws.cell(row=9, column=vc).number_format = DATE_FMT
-
-    ws.cell(row=10, column=vc,
-            value=f'=LOOKUP(2,1/({dt}{AMORT_DATA_START}:{dt}{AMORT_DATA_END}<>""),{dt}{AMORT_DATA_START}:{dt}{AMORT_DATA_END})')
+    ws.cell(row=10, column=vc, value='=EDATE(StartDate,TermYears*12-1)')
     ws.cell(row=10, column=vc).number_format = DATE_FMT
 
-    actual_months_formula = f'SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END})))'
     ws.cell(row=11, column=vc,
+            value=f'=LOOKUP(2,1/({dt}{AMORT_DATA_START}:{dt}{AMORT_DATA_END}<>""),{dt}{AMORT_DATA_START}:{dt}{AMORT_DATA_END})')
+    ws.cell(row=11, column=vc).number_format = DATE_FMT
+
+    actual_months_formula = f'SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END})))'
+    ws.cell(row=12, column=vc,
             value=f'=INT({actual_months_formula}/12)&" years, "&MOD({actual_months_formula},12)&" months"')
 
-    ws.cell(row=12, column=vc, value='=ROUND(MonthlyPmt*TermYears*12-LoanAmount,2)')
-    ws.cell(row=12, column=vc).number_format = CURRENCY_FMT
-
-    ws.cell(row=13, column=vc,
-            value=f'=ROUND(SUM({it}{AMORT_DATA_START}:{it}{AMORT_DATA_END}),2)')
+    ws.cell(row=13, column=vc, value='=ROUND(MonthlyPmt*TermYears*12-LoanAmount,2)')
     ws.cell(row=13, column=vc).number_format = CURRENCY_FMT
 
-    ws.cell(row=14, column=vc, value=f'=B12-B13')
+    ws.cell(row=14, column=vc,
+            value=f'=ROUND(SUM({it}{AMORT_DATA_START}:{it}{AMORT_DATA_END}),2)')
     ws.cell(row=14, column=vc).number_format = CURRENCY_FMT
-    ws.cell(row=14, column=vc).font = Font(bold=True, color="006600", size=12)
 
-    months_saved = f'(TermYears*12-SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END}))))'
-    ws.cell(row=15, column=vc,
-            value=f'=INT({months_saved}/12)&" years, "&MOD({months_saved},12)&" months"')
+    ws.cell(row=15, column=vc, value=f'=B13-B14')
+    ws.cell(row=15, column=vc).number_format = CURRENCY_FMT
     ws.cell(row=15, column=vc).font = Font(bold=True, color="006600", size=12)
 
+    months_saved = f'(TermYears*12-SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END}))))'
     ws.cell(row=16, column=vc,
-            value=f'=ROUND(SUM({pm}{AMORT_DATA_START}:{pm}{AMORT_DATA_END}),2)')
-    ws.cell(row=16, column=vc).number_format = CURRENCY_FMT
+            value=f'=INT({months_saved}/12)&" years, "&MOD({months_saved},12)&" months"')
+    ws.cell(row=16, column=vc).font = Font(bold=True, color="006600", size=12)
 
     ws.cell(row=17, column=vc,
-            value=f'=ROUND(SUM({pr}{AMORT_DATA_START}:{pr}{AMORT_DATA_END})-SUM({pm}{AMORT_DATA_START}:{pm}{AMORT_DATA_END})+SUM({it}{AMORT_DATA_START}:{it}{AMORT_DATA_END}),2)')
+            value=f'=ROUND(SUM({pm}{AMORT_DATA_START}:{pm}{AMORT_DATA_END}),2)')
     ws.cell(row=17, column=vc).number_format = CURRENCY_FMT
 
-    for row_num in range(9, 18):
+    ws.cell(row=18, column=vc,
+            value=f'=ROUND(SUM({pr}{AMORT_DATA_START}:{pr}{AMORT_DATA_END})-SUM({pm}{AMORT_DATA_START}:{pm}{AMORT_DATA_END})+SUM({it}{AMORT_DATA_START}:{it}{AMORT_DATA_END}),2)')
+    ws.cell(row=18, column=vc).number_format = CURRENCY_FMT
+
+    for row_num in range(10, 19):
         cell = ws.cell(row=row_num, column=vc)
         cell.border = THIN_BORDER
         cell.alignment = Alignment(horizontal="right")
@@ -464,7 +464,7 @@ def create_workbook():
     ws.cell(row=1, column=HELPER_COL + 1, value="Amount").font = Font(color="FFFFFF", size=1)
     ws.cell(row=2, column=HELPER_COL + 1, value="=LoanAmount")
     ws.cell(row=2, column=HELPER_COL + 1).font = Font(color="FFFFFF", size=1)
-    ws.cell(row=3, column=HELPER_COL + 1, value="=B13")
+    ws.cell(row=3, column=HELPER_COL + 1, value="=B14")
     ws.cell(row=3, column=HELPER_COL + 1).font = Font(color="FFFFFF", size=1)
     ws.column_dimensions[hc].width = 0.5
     ws.column_dimensions[ac(HELPER_COL + 1)].width = 0.5
