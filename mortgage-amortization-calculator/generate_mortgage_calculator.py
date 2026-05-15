@@ -21,6 +21,10 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.workbook.defined_name import DefinedName
+from openpyxl.chart import PieChart, LineChart, Reference
+from openpyxl.chart.series import DataPoint
+from openpyxl.chart.label import DataLabelList
+from openpyxl.utils.units import cm_to_EMU
 from copy import copy
 
 
@@ -397,6 +401,104 @@ def create_workbook():
 
     # Freeze panes: keep amort headers visible when scrolling
     ws.freeze_panes = f"{ac(AC)}{AMORT_DATA_START}"
+
+    # -----------------------------------------------------------------------
+    # G. CHARTS (far right, starting at column O)
+    # -----------------------------------------------------------------------
+    CHART_COL = AC + NUM_AMORT_COLS + 2  # Column O (15)
+    chart_col_letter = ac(CHART_COL)
+
+    # -- Pie chart helper data (hidden area for pie chart labels/values) --
+    # Place in column N (14) which is just after amort table
+    HELPER_COL = AC + NUM_AMORT_COLS + 1  # N (14)
+    hc = ac(HELPER_COL)
+    ws.cell(row=1, column=HELPER_COL, value="Category").font = Font(color="FFFFFF", size=1)
+    ws.cell(row=2, column=HELPER_COL, value="Principal").font = Font(color="FFFFFF", size=1)
+    ws.cell(row=3, column=HELPER_COL, value="Interest").font = Font(color="FFFFFF", size=1)
+    ws.cell(row=1, column=HELPER_COL + 1, value="Amount").font = Font(color="FFFFFF", size=1)
+    ws.cell(row=2, column=HELPER_COL + 1, value="=LoanAmount")
+    ws.cell(row=2, column=HELPER_COL + 1).font = Font(color="FFFFFF", size=1)
+    ws.cell(row=3, column=HELPER_COL + 1, value="=B13")
+    ws.cell(row=3, column=HELPER_COL + 1).font = Font(color="FFFFFF", size=1)
+    # Hide helper column
+    ws.column_dimensions[hc].width = 0.5
+    ws.column_dimensions[ac(HELPER_COL + 1)].width = 0.5
+
+    # -- PIE CHART: Principal vs Interest --
+    pie = PieChart()
+    pie.title = "Principal vs Interest"
+    pie.style = 10
+    pie.width = 18
+    pie.height = 14
+
+    labels = Reference(ws, min_col=HELPER_COL, min_row=2, max_row=3)
+    data = Reference(ws, min_col=HELPER_COL + 1, min_row=1, max_row=3)
+    pie.add_data(data, titles_from_data=True)
+    pie.set_categories(labels)
+
+    # Colors: blue for principal, red for interest
+    from openpyxl.chart.series import DataPoint
+    from openpyxl.drawing.fill import PatternFillProperties, ColorChoice
+    pt_principal = DataPoint(idx=0)
+    pt_principal.graphicalProperties.solidFill = "2F5496"
+    pie.series[0].data_points.append(pt_principal)
+    pt_interest = DataPoint(idx=1)
+    pt_interest.graphicalProperties.solidFill = "C00000"
+    pie.series[0].data_points.append(pt_interest)
+
+    # Show percentage labels
+    pie.series[0].dLbls = DataLabelList()
+    pie.series[0].dLbls.showPercent = True
+    pie.series[0].dLbls.showCatName = True
+    pie.series[0].dLbls.showVal = False
+
+    ws.add_chart(pie, f"{ac(CHART_COL + 1)}1")
+
+    # -- LINE CHART: Principal, Interest, Balance over time --
+    line = LineChart()
+    line.title = "Loan Amortization Over Time"
+    line.style = 10
+    line.width = 28
+    line.height = 16
+    line.y_axis.title = "Dollars ($)"
+    line.x_axis.title = "Year"
+    line.y_axis.numFmt = '#,##0'
+
+    # Categories: dates (col I)
+    cats = Reference(ws, min_col=DATE_COL, min_row=AMORT_DATA_START,
+                     max_row=AMORT_DATA_END)
+
+    # Series: Principal (col L), Interest (col K), Balance (col M)
+    principal_data = Reference(ws, min_col=PRINCIPAL_COL,
+                               min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
+    interest_data = Reference(ws, min_col=INTEREST_COL,
+                              min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
+    balance_data = Reference(ws, min_col=END_BAL_COL,
+                             min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
+
+    line.add_data(principal_data, titles_from_data=True)
+    line.add_data(interest_data, titles_from_data=True)
+    line.add_data(balance_data, titles_from_data=True)
+    line.set_categories(cats)
+
+    # Colors matching pie chart + green for balance
+    line.series[0].graphicalProperties.line.solidFill = "2F5496"  # Principal - blue
+    line.series[1].graphicalProperties.line.solidFill = "C00000"  # Interest - red
+    line.series[2].graphicalProperties.line.solidFill = "006600"  # Balance - green
+
+    # Line width
+    for s in line.series:
+        s.graphicalProperties.line.width = 20000  # EMUs (~1.5pt)
+        s.smooth = False
+
+    # X-axis: show dates as years
+    line.x_axis.numFmt = 'YYYY'
+    line.x_axis.majorTimeUnit = "years"
+    line.x_axis.number_format = 'YYYY'
+    line.x_axis.tickLblPos = "low"
+    line.x_axis.delete = False
+
+    ws.add_chart(line, f"{ac(CHART_COL + 1)}16")
 
     return wb, ws
 
