@@ -119,7 +119,9 @@ def create_workbook():
     INTEREST_COL = AC + 3  # K - Interest
     PRINCIPAL_COL = AC + 4 # L - Principal
     END_BAL_COL = AC + 5   # M - Ending Balance
-    NUM_AMORT_COLS = 6
+    CUM_PRINCIPAL_COL = AC + 6  # N - Cumulative Principal (hidden)
+    CUM_INTEREST_COL = AC + 7   # O - Cumulative Interest (hidden)
+    NUM_AMORT_COLS = 6  # visible columns only
 
     # -----------------------------------------------------------------------
     # A. LOAN DETAILS (left panel, rows 1-6)
@@ -287,6 +289,12 @@ def create_workbook():
         ws.cell(row=AMORT_HEADER_ROW, column=AC + i, value=h)
     style_header_row_range(ws, AMORT_HEADER_ROW, AC, AC + NUM_AMORT_COLS - 1)
 
+    # Hidden cumulative columns for chart (headers only for Reference titles_from_data)
+    cp = ac(CUM_PRINCIPAL_COL)  # N
+    ci = ac(CUM_INTEREST_COL)   # O
+    ws.cell(row=AMORT_HEADER_ROW, column=CUM_PRINCIPAL_COL, value="Cumul. Principal")
+    ws.cell(row=AMORT_HEADER_ROW, column=CUM_INTEREST_COL, value="Cumul. Interest")
+
     # Recurring/one-time range references (absolute)
     rec_start_range = f"$B${RECURRING_DATA_START}:$B${RECURRING_DATA_END}"
     rec_end_range = f"$C${RECURRING_DATA_START}:$C${RECURRING_DATA_END}"
@@ -366,6 +374,24 @@ def create_workbook():
                 value=f'=IF({pn_cell}<>"",ROUND({bal_ref}-{pr_cell},2),"")')
         ws.cell(row=r, column=END_BAL_COL).number_format = CURRENCY_FMT
 
+        # Cumulative Principal (hidden col for chart)
+        if idx == 0:
+            ws.cell(row=r, column=CUM_PRINCIPAL_COL,
+                    value=f'=IF({pn_cell}<>"",{pr_cell},"")')
+        else:
+            ws.cell(row=r, column=CUM_PRINCIPAL_COL,
+                    value=f'=IF({pn_cell}<>"",{cp}{prev_r}+{pr_cell},"")')
+        ws.cell(row=r, column=CUM_PRINCIPAL_COL).number_format = CURRENCY_FMT
+
+        # Cumulative Interest (hidden col for chart)
+        if idx == 0:
+            ws.cell(row=r, column=CUM_INTEREST_COL,
+                    value=f'=IF({pn_cell}<>"",{it_cell},"")')
+        else:
+            ws.cell(row=r, column=CUM_INTEREST_COL,
+                    value=f'=IF({pn_cell}<>"",{ci}{prev_r}+{it_cell},"")')
+        ws.cell(row=r, column=CUM_INTEREST_COL).number_format = CURRENCY_FMT
+
         # Alternate row shading
         if idx % 2 == 1:
             for c in range(AC, AC + NUM_AMORT_COLS):
@@ -398,13 +424,17 @@ def create_workbook():
     for col, width in col_widths.items():
         ws.column_dimensions[get_column_letter(col)].width = width
 
+    # Hide cumulative columns (used only by chart)
+    ws.column_dimensions[ac(CUM_PRINCIPAL_COL)].width = 0.5
+    ws.column_dimensions[ac(CUM_INTEREST_COL)].width = 0.5
+
     # Freeze panes: keep amort headers visible when scrolling
     ws.freeze_panes = f"{ac(AC)}{AMORT_DATA_START}"
 
     # -----------------------------------------------------------------------
     # G. CHARTS (far right, starting at column O)
     # -----------------------------------------------------------------------
-    CHART_COL = AC + NUM_AMORT_COLS + 2  # Column O (15)
+    CHART_COL = CUM_INTEREST_COL + 3  # skip 2 cols for helper data
 
     # ggplot2-inspired soft colors
     SOFT_BLUE = "619CFF"    # principal
@@ -412,7 +442,7 @@ def create_workbook():
     SOFT_GREEN = "00BA38"   # balance
 
     # -- Pie chart helper data (hidden area) --
-    HELPER_COL = AC + NUM_AMORT_COLS + 1  # N (14)
+    HELPER_COL = CUM_INTEREST_COL + 1
     hc = ac(HELPER_COL)
     ws.cell(row=1, column=HELPER_COL, value="Category").font = Font(color="FFFFFF", size=1)
     ws.cell(row=2, column=HELPER_COL, value="Principal").font = Font(color="FFFFFF", size=1)
@@ -473,10 +503,10 @@ def create_workbook():
     cats = Reference(ws, min_col=DATE_COL, min_row=AMORT_DATA_START,
                      max_row=AMORT_DATA_END)
 
-    # Series data
-    principal_data = Reference(ws, min_col=PRINCIPAL_COL,
+    # Series data: cumulative principal, cumulative interest, ending balance
+    principal_data = Reference(ws, min_col=CUM_PRINCIPAL_COL,
                                min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
-    interest_data = Reference(ws, min_col=INTEREST_COL,
+    interest_data = Reference(ws, min_col=CUM_INTEREST_COL,
                               min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
     balance_data = Reference(ws, min_col=END_BAL_COL,
                              min_row=AMORT_HEADER_ROW, max_row=AMORT_DATA_END)
