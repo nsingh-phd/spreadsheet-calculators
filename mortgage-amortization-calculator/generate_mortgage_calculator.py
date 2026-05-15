@@ -459,8 +459,8 @@ def create_workbook():
     pie = PieChart()
     pie.title = "Principal vs Interest"
     pie.style = 10
-    pie.width = 14
-    pie.height = 11
+    pie.width = 10.5
+    pie.height = 8.25
 
     labels_ref = Reference(ws, min_col=HELPER_COL, min_row=2, max_row=3)
     data = Reference(ws, min_col=HELPER_COL + 1, min_row=1, max_row=3)
@@ -488,16 +488,17 @@ def create_workbook():
     line = LineChart()
     line.title = "Loan Amortization Over Time"
     line.style = 10
-    line.width = 22
-    line.height = 13
+    line.width = 16.5
+    line.height = 9.75
 
     # No axis titles
     line.y_axis.title = None
     line.x_axis.title = None
 
-    # Y-axis: dollar format like $300K
+    # Y-axis: dollar ticks
     line.y_axis.numFmt = '$#,##0,K'
     line.y_axis.number_format = '$#,##0,K'
+    line.y_axis.delete = False
 
     # Categories: dates (col I)
     cats = Reference(ws, min_col=DATE_COL, min_row=AMORT_DATA_START,
@@ -525,12 +526,13 @@ def create_workbook():
         s.graphicalProperties.line.width = 28000  # ~2.2pt
         s.smooth = False
 
-    # X-axis: years
+    # X-axis: ticks at 5-year intervals (60 months)
     line.x_axis.numFmt = 'YYYY'
     line.x_axis.majorTimeUnit = "years"
     line.x_axis.number_format = 'YYYY'
     line.x_axis.tickLblPos = "low"
     line.x_axis.delete = False
+    line.x_axis.majorUnit = 60  # 5 years in months
     # Very faint gray gridlines
     from openpyxl.drawing.line import LineProperties
     from openpyxl.chart.axis import ChartLines
