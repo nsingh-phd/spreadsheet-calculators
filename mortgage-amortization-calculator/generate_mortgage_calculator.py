@@ -134,7 +134,8 @@ def create_workbook():
         (3, "Annual Interest Rate"),
         (4, "Loan Term (years)"),
         (5, "Start Date"),
-        (6, "Monthly Payment"),
+        (6, "Min Monthly Payment"),
+        (7, "Current Monthly Payment"),
     ]
     for row_num, label in labels:
         ws.cell(row=row_num, column=1, value=label).font = Font(bold=True)
@@ -151,8 +152,16 @@ def create_workbook():
     ws.cell(row=6, column=2).font = Font(bold=True, color="006600")
     ws.cell(row=6, column=2).border = THIN_BORDER
 
+    # Current Monthly Payment = base + monthly recurring extras
+    rec_amt = f"$D${RECURRING_DATA_START}:$D${RECURRING_DATA_END}"
+    rec_freq = f"$E${RECURRING_DATA_START}:$E${RECURRING_DATA_END}"
+    ws.cell(row=7, column=2).value = f'=B6+SUMPRODUCT(({rec_freq}="Monthly")*({rec_amt}<>"")*{rec_amt})'
+    ws.cell(row=7, column=2).number_format = CURRENCY_FMT
+    ws.cell(row=7, column=2).font = Font(bold=True, color="006600")
+    ws.cell(row=7, column=2).border = THIN_BORDER
+
     # Right-justify all numeric values in Loan Details
-    for r in range(2, 7):
+    for r in range(2, 8):
         ws.cell(row=r, column=2).alignment = Alignment(horizontal="right")
 
     add_named_range(wb, "LoanAmount", "Calculator!$B$2")
