@@ -17,7 +17,7 @@ A full-featured mortgage amortization schedule with support for extra payments.
 **Quick start:**
 1. Install dependencies: `uv pip install -r mortgage-amortization-calculator/requirements.txt`
 2. Generate the spreadsheet: `uv run mortgage-amortization-calculator/generate_mortgage_calculator.py`
-3. Open `mortgage-amortization-calculator/output/mortgage_amortization_calculator.xlsx` in Excel
+3. Open `mortgage-amortization-calculator/mortgage_amortization_calculator.xlsx` in Excel
 4. Edit the yellow input cells and the schedule updates automatically
 
 ---

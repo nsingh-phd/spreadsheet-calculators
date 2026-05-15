@@ -12,7 +12,7 @@ Usage:
     python generate_mortgage_calculator.py
 
 Output:
-    output/mortgage_amortization_calculator.xlsx
+    mortgage_amortization_calculator.xlsx
 """
 
 import os
@@ -397,9 +397,7 @@ def main():
     wb, ws = create_workbook()
 
     # Save
-    output_dir = os.path.join(os.path.dirname(__file__), "output")
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "mortgage_amortization_calculator.xlsx")
+    output_path = os.path.join(os.path.dirname(__file__), "mortgage_amortization_calculator.xlsx")
     wb.save(output_path)
     print(f"✅ Mortgage calculator generated: {output_path}")
     print(f"   Open in Excel and edit the yellow input cells.")
