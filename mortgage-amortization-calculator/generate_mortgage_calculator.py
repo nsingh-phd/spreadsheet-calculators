@@ -36,20 +36,27 @@ MAX_MONTHS = 360  # 30-year max
 NUM_RECURRING = 10
 NUM_ONETIME = 15
 
-# Layout rows (1-indexed)
+# Left panel layout rows (1-indexed)
 INPUT_START_ROW = 2
-RECURRING_HEADER_ROW = 9
-RECURRING_DATA_START = 10
-RECURRING_DATA_END = RECURRING_DATA_START + NUM_RECURRING - 1  # 19
-ONETIME_HEADER_ROW = RECURRING_DATA_END + 2  # 21
-ONETIME_DATA_START = ONETIME_HEADER_ROW + 1  # 22
-ONETIME_DATA_END = ONETIME_DATA_START + NUM_ONETIME - 1  # 36
-AMORT_HEADER_ROW = ONETIME_DATA_END + 2  # 38
-AMORT_DATA_START = AMORT_HEADER_ROW + 1  # 39
-AMORT_DATA_END = AMORT_DATA_START + MAX_MONTHS - 1  # 398
+SUMMARY_HEADER_ROW = 8
+SUMMARY_DATA_START = 9
+SUMMARY_DATA_END = 17
 
-# Summary location (to the right of inputs)
-SUMMARY_COL = 5  # Column E
+RECURRING_SECTION_ROW = 19
+RECURRING_HEADER_ROW = 20
+RECURRING_DATA_START = 21
+RECURRING_DATA_END = RECURRING_DATA_START + NUM_RECURRING - 1  # 30
+
+ONETIME_SECTION_ROW = 32
+ONETIME_HEADER_ROW = 33
+ONETIME_DATA_START = 34
+ONETIME_DATA_END = ONETIME_DATA_START + NUM_ONETIME - 1  # 48
+
+# Right panel: amortization schedule (starts at column H)
+AMORT_COL = 8  # Column H
+AMORT_HEADER_ROW = 2
+AMORT_DATA_START = 3
+AMORT_DATA_END = AMORT_DATA_START + MAX_MONTHS - 1  # 362
 
 # Styling
 HEADER_FILL = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
@@ -71,11 +78,11 @@ DATE_FMT = 'MMM YYYY'
 NUMBER_FMT = '#,##0'
 
 
-def style_header_row(ws, row, cols, fill=None, font=None):
+def style_header_row_range(ws, row, col_start, col_end, fill=None, font=None):
     """Apply header styling to a range of cells in a row."""
     fill = fill or HEADER_FILL
     font = font or HEADER_FONT
-    for c in range(1, cols + 1):
+    for c in range(col_start, col_end + 1):
         cell = ws.cell(row=row, column=c)
         cell.fill = fill
         cell.font = font
@@ -97,11 +104,25 @@ def create_workbook():
     ws = wb.active
     ws.title = "Calculator"
 
+    from datetime import date
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    # Column letters for amortization (starting at AMORT_COL=8 → H)
+    AC = AMORT_COL
+    ac = get_column_letter  # shorthand
+    PAY_NUM_COL = AC       # H - Payment #
+    DATE_COL = AC + 1      # I - Date
+    PAYMENT_COL = AC + 2   # J - Payment
+    INTEREST_COL = AC + 3  # K - Interest
+    PRINCIPAL_COL = AC + 4 # L - Principal
+    END_BAL_COL = AC + 5   # M - Ending Balance
+    NUM_AMORT_COLS = 6
+
     # -----------------------------------------------------------------------
-    # A. INPUTS SECTION
+    # A. LOAN DETAILS (left panel, rows 1-6)
     # -----------------------------------------------------------------------
-    ws.merge_cells("A1:C1")
-    ws.cell(row=1, column=1, value="MORTGAGE INPUTS").font = SECTION_FONT
+    ws.merge_cells("A1:B1")
+    ws.cell(row=1, column=1, value="LOAN DETAILS").font = SECTION_FONT
 
     labels = [
         (2, "Loan Amount ($)"),
@@ -114,23 +135,17 @@ def create_workbook():
         ws.cell(row=row_num, column=1, value=label).font = Font(bold=True)
         ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
 
-    # Input cells (B2:B5) - user editable
-    style_input_cell(ws.cell(row=2, column=2, value=300000), CURRENCY_FMT)   # Loan Amount
-    style_input_cell(ws.cell(row=3, column=2, value=0.05875), PERCENT_FMT)   # Interest Rate
-    style_input_cell(ws.cell(row=4, column=2, value=30), NUMBER_FMT)         # Term
-    style_input_cell(ws.cell(row=5, column=2), DATE_FMT)                     # Start Date
-
-    # Set sample start date
-    from datetime import date
+    style_input_cell(ws.cell(row=2, column=2, value=300000), CURRENCY_FMT)
+    style_input_cell(ws.cell(row=3, column=2, value=0.05875), PERCENT_FMT)
+    style_input_cell(ws.cell(row=4, column=2, value=30), NUMBER_FMT)
+    style_input_cell(ws.cell(row=5, column=2), DATE_FMT)
     ws.cell(row=5, column=2).value = date(2026, 1, 1)
 
-    # Monthly payment formula: =ROUND(-PMT(B3/12, B4*12, B2), 2)
     ws.cell(row=6, column=2).value = '=ROUND(-PMT(B3/12,B4*12,B2),2)'
     ws.cell(row=6, column=2).number_format = CURRENCY_FMT
     ws.cell(row=6, column=2).font = Font(bold=True, color="006600")
     ws.cell(row=6, column=2).border = THIN_BORDER
 
-    # Define named ranges
     add_named_range(wb, "LoanAmount", "Calculator!$B$2")
     add_named_range(wb, "AnnualRate", "Calculator!$B$3")
     add_named_range(wb, "TermYears", "Calculator!$B$4")
@@ -138,26 +153,97 @@ def create_workbook():
     add_named_range(wb, "MonthlyPmt", "Calculator!$B$6")
 
     # -----------------------------------------------------------------------
-    # B. RECURRING EXTRA PAYMENTS TABLE
+    # B. LOAN SUMMARY (left panel, rows 8-17)
     # -----------------------------------------------------------------------
-    ws.merge_cells(f"A8:D8")
-    ws.cell(row=8, column=1, value="RECURRING EXTRA PAYMENTS").font = SECTION_FONT
+    ws.merge_cells("A8:B8")
+    ws.cell(row=SUMMARY_HEADER_ROW, column=1, value="LOAN SUMMARY").font = SECTION_FONT
 
-    rec_headers = ["#", "Start Date", "Amount ($)", "Frequency"]
+    # Amort column letter references for summary formulas
+    pn = ac(PAY_NUM_COL)   # H
+    dt = ac(DATE_COL)       # I
+    pm = ac(PAYMENT_COL)    # J
+    it = ac(INTEREST_COL)   # K
+    pr = ac(PRINCIPAL_COL)  # L
+    eb = ac(END_BAL_COL)    # M
+
+    summary_items = [
+        (9,  "Original Payoff Date"),
+        (10, "Accelerated Payoff Date"),
+        (11, "Accelerated Payoff Time"),
+        (12, "Original Total Interest"),
+        (13, "Accelerated Total Interest"),
+        (14, "Interest Saved"),
+        (15, "Months Saved"),
+        (16, "Total of Payments (P+I)"),
+        (17, "Total Extra Payments"),
+    ]
+    for row_num, label in summary_items:
+        cell = ws.cell(row=row_num, column=1, value=label)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="right")
+
+    vc = 2  # value column B
+
+    ws.cell(row=9, column=vc, value='=EDATE(StartDate,TermYears*12-1)')
+    ws.cell(row=9, column=vc).number_format = DATE_FMT
+
+    ws.cell(row=10, column=vc,
+            value=f'=LOOKUP(2,1/({dt}{AMORT_DATA_START}:{dt}{AMORT_DATA_END}<>""),{dt}{AMORT_DATA_START}:{dt}{AMORT_DATA_END})')
+    ws.cell(row=10, column=vc).number_format = DATE_FMT
+
+    actual_months_formula = f'SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END})))'
+    ws.cell(row=11, column=vc,
+            value=f'=INT({actual_months_formula}/12)&" years, "&MOD({actual_months_formula},12)&" months"')
+
+    ws.cell(row=12, column=vc, value='=ROUND(MonthlyPmt*TermYears*12-LoanAmount,2)')
+    ws.cell(row=12, column=vc).number_format = CURRENCY_FMT
+
+    ws.cell(row=13, column=vc,
+            value=f'=ROUND(SUM({it}{AMORT_DATA_START}:{it}{AMORT_DATA_END}),2)')
+    ws.cell(row=13, column=vc).number_format = CURRENCY_FMT
+
+    ws.cell(row=14, column=vc, value=f'=B12-B13')
+    ws.cell(row=14, column=vc).number_format = CURRENCY_FMT
+    ws.cell(row=14, column=vc).font = Font(bold=True, color="006600", size=12)
+
+    ws.cell(row=15, column=vc,
+            value=f'=TermYears*12-SUMPRODUCT(1*(ISNUMBER({pn}{AMORT_DATA_START}:{pn}{AMORT_DATA_END})))')
+    ws.cell(row=15, column=vc).number_format = NUMBER_FMT
+    ws.cell(row=15, column=vc).font = Font(bold=True, color="006600", size=12)
+
+    ws.cell(row=16, column=vc,
+            value=f'=ROUND(SUM({pm}{AMORT_DATA_START}:{pm}{AMORT_DATA_END}),2)')
+    ws.cell(row=16, column=vc).number_format = CURRENCY_FMT
+
+    ws.cell(row=17, column=vc,
+            value=f'=ROUND(SUM({pr}{AMORT_DATA_START}:{pr}{AMORT_DATA_END})-SUM({pm}{AMORT_DATA_START}:{pm}{AMORT_DATA_END})+SUM({it}{AMORT_DATA_START}:{it}{AMORT_DATA_END}),2)')
+    ws.cell(row=17, column=vc).number_format = CURRENCY_FMT
+
+    for row_num in range(9, 18):
+        cell = ws.cell(row=row_num, column=vc)
+        cell.border = THIN_BORDER
+        cell.alignment = Alignment(horizontal="center")
+
+    # -----------------------------------------------------------------------
+    # C. RECURRING EXTRA PAYMENTS (left panel, rows 19-30)
+    # -----------------------------------------------------------------------
+    ws.merge_cells(f"A{RECURRING_SECTION_ROW}:E{RECURRING_SECTION_ROW}")
+    ws.cell(row=RECURRING_SECTION_ROW, column=1, value="RECURRING EXTRA PAYMENTS").font = SECTION_FONT
+
+    rec_headers = ["#", "Start Date", "End Date (optional)", "Amount ($)", "Frequency"]
     for i, h in enumerate(rec_headers, 1):
         ws.cell(row=RECURRING_HEADER_ROW, column=i, value=h)
-    style_header_row(ws, RECURRING_HEADER_ROW, 4)
+    style_header_row_range(ws, RECURRING_HEADER_ROW, 1, 5)
 
     for idx in range(NUM_RECURRING):
         r = RECURRING_DATA_START + idx
         ws.cell(row=r, column=1, value=idx + 1).alignment = Alignment(horizontal="center")
         ws.cell(row=r, column=1).border = THIN_BORDER
         style_input_cell(ws.cell(row=r, column=2), DATE_FMT)       # Start Date
-        style_input_cell(ws.cell(row=r, column=3), CURRENCY_FMT)   # Amount
-        style_input_cell(ws.cell(row=r, column=4))                  # Frequency
+        style_input_cell(ws.cell(row=r, column=3), DATE_FMT)       # End Date (optional)
+        style_input_cell(ws.cell(row=r, column=4), CURRENCY_FMT)   # Amount
+        style_input_cell(ws.cell(row=r, column=5))                  # Frequency
 
-    # Add data validation for frequency column
-    from openpyxl.worksheet.datavalidation import DataValidation
     freq_dv = DataValidation(
         type="list",
         formula1='"Monthly,Annual"',
@@ -166,229 +252,151 @@ def create_workbook():
         errorTitle="Invalid Frequency",
         error="Please select Monthly or Annual",
     )
-    freq_dv.add(f"D{RECURRING_DATA_START}:D{RECURRING_DATA_END}")
+    freq_dv.add(f"E{RECURRING_DATA_START}:E{RECURRING_DATA_END}")
     ws.add_data_validation(freq_dv)
 
-    # Named range for recurring table
-    add_named_range(wb, "RecurringTable",
-                    f"Calculator!$B${RECURRING_DATA_START}:$D${RECURRING_DATA_END}")
-
     # -----------------------------------------------------------------------
-    # C. ONE-TIME EXTRA PAYMENTS TABLE
+    # D. ONE-TIME EXTRA PAYMENTS (left panel, rows 32-48)
     # -----------------------------------------------------------------------
-    ws.merge_cells(f"A{ONETIME_HEADER_ROW - 1}:C{ONETIME_HEADER_ROW - 1}")
-    ws.cell(row=ONETIME_HEADER_ROW - 1, column=1, value="ONE-TIME EXTRA PAYMENTS").font = SECTION_FONT
+    ws.merge_cells(f"A{ONETIME_SECTION_ROW}:C{ONETIME_SECTION_ROW}")
+    ws.cell(row=ONETIME_SECTION_ROW, column=1, value="ONE-TIME EXTRA PAYMENTS").font = SECTION_FONT
 
     ot_headers = ["#", "Date", "Amount ($)"]
     for i, h in enumerate(ot_headers, 1):
         ws.cell(row=ONETIME_HEADER_ROW, column=i, value=h)
-    style_header_row(ws, ONETIME_HEADER_ROW, 3)
+    style_header_row_range(ws, ONETIME_HEADER_ROW, 1, 3)
 
     for idx in range(NUM_ONETIME):
         r = ONETIME_DATA_START + idx
         ws.cell(row=r, column=1, value=idx + 1).alignment = Alignment(horizontal="center")
         ws.cell(row=r, column=1).border = THIN_BORDER
-        style_input_cell(ws.cell(row=r, column=2), DATE_FMT)       # Date
-        style_input_cell(ws.cell(row=r, column=3), CURRENCY_FMT)   # Amount
-
-    add_named_range(wb, "OneTimeTable",
-                    f"Calculator!$B${ONETIME_DATA_START}:$C${ONETIME_DATA_END}")
+        style_input_cell(ws.cell(row=r, column=2), DATE_FMT)
+        style_input_cell(ws.cell(row=r, column=3), CURRENCY_FMT)
 
     # -----------------------------------------------------------------------
-    # D. AMORTIZATION SCHEDULE
+    # E. AMORTIZATION SCHEDULE (right panel, col H-M, rows 1-362)
     # -----------------------------------------------------------------------
-    ws.merge_cells(f"A{AMORT_HEADER_ROW - 1}:F{AMORT_HEADER_ROW - 1}")
-    ws.cell(row=AMORT_HEADER_ROW - 1, column=1, value="AMORTIZATION SCHEDULE").font = SECTION_FONT
+    ws.merge_cells(f"{ac(AC)}1:{ac(AC + NUM_AMORT_COLS - 1)}1")
+    ws.cell(row=1, column=AC, value="AMORTIZATION SCHEDULE").font = SECTION_FONT
 
-    amort_headers = [
-        "Payment #", "Date", "Payment", "Interest", "Principal", "Ending Balance",
-    ]
-    num_amort_cols = len(amort_headers)
-    for i, h in enumerate(amort_headers, 1):
-        ws.cell(row=AMORT_HEADER_ROW, column=i, value=h)
-    style_header_row(ws, AMORT_HEADER_ROW, num_amort_cols)
+    amort_headers = ["Payment #", "Date", "Payment", "Interest", "Principal", "Ending Balance"]
+    for i, h in enumerate(amort_headers):
+        ws.cell(row=AMORT_HEADER_ROW, column=AC + i, value=h)
+    style_header_row_range(ws, AMORT_HEADER_ROW, AC, AC + NUM_AMORT_COLS - 1)
 
-    # --- Build formulas for each row ---
-    # Layout: A=Payment#, B=Date, C=Payment, D=Interest, E=Principal, F=Ending Balance
-    # Principal combines scheduled principal + extra payments (capped so balance >= 0)
+    # Recurring/one-time range references (absolute)
+    rec_start_range = f"$B${RECURRING_DATA_START}:$B${RECURRING_DATA_END}"
+    rec_end_range = f"$C${RECURRING_DATA_START}:$C${RECURRING_DATA_END}"
+    rec_amount_range = f"$D${RECURRING_DATA_START}:$D${RECURRING_DATA_END}"
+    rec_freq_range = f"$E${RECURRING_DATA_START}:$E${RECURRING_DATA_END}"
+    ot_date_range = f"$B${ONETIME_DATA_START}:$B${ONETIME_DATA_END}"
+    ot_amount_range = f"$C${ONETIME_DATA_START}:$C${ONETIME_DATA_END}"
+
     for idx in range(MAX_MONTHS):
         r = AMORT_DATA_START + idx
-        n = idx + 1  # payment number
+        n = idx + 1
         prev_r = r - 1
 
-        # Reference to beginning balance (previous row's ending balance, or LoanAmount)
+        # Column letter references
+        pn_cell = f"{pn}{r}"     # Payment #
+        dt_cell = f"{dt}{r}"     # Date
+        pm_cell = f"{pm}{r}"     # Payment
+        it_cell = f"{it}{r}"     # Interest
+        pr_cell = f"{pr}{r}"     # Principal
+        eb_cell = f"{eb}{r}"     # Ending Balance
+
+        # Beginning balance reference
         if idx == 0:
             bal_ref = "LoanAmount"
         else:
-            bal_ref = f"F{prev_r}"
+            bal_ref = f"{eb}{prev_r}"
 
-        # Col A: Payment # — only show if there's balance remaining
+        # Payment # — show if balance remaining
         if idx == 0:
-            ws.cell(row=r, column=1, value=f'=IF(LoanAmount>0,{n},"")')
+            ws.cell(row=r, column=PAY_NUM_COL, value=f'=IF(LoanAmount>0,{n},"")')
         else:
-            ws.cell(row=r, column=1, value=f'=IF(AND(F{prev_r}>0.005,A{prev_r}<>""),{n},"")')
+            ws.cell(row=r, column=PAY_NUM_COL,
+                    value=f'=IF(AND({eb}{prev_r}>0.005,{pn}{prev_r}<>""),{n},"")')
 
-        # Col B: Date — StartDate + n-1 months using EDATE
+        # Date
         if idx == 0:
-            ws.cell(row=r, column=2, value=f'=IF(A{r}<>"",StartDate,"")')
+            ws.cell(row=r, column=DATE_COL, value=f'=IF({pn_cell}<>"",StartDate,"")')
         else:
-            ws.cell(row=r, column=2, value=f'=IF(A{r}<>"",EDATE(StartDate,{n - 1}),"")')
-        ws.cell(row=r, column=2).number_format = DATE_FMT
+            ws.cell(row=r, column=DATE_COL, value=f'=IF({pn_cell}<>"",EDATE(StartDate,{n - 1}),"")')
+        ws.cell(row=r, column=DATE_COL).number_format = DATE_FMT
 
-        # Col D: Interest = Beginning Balance * Monthly Rate
-        ws.cell(row=r, column=4, value=f'=IF(A{r}<>"",ROUND({bal_ref}*AnnualRate/12,2),"")')
-        ws.cell(row=r, column=4).number_format = CURRENCY_FMT
+        # Interest
+        ws.cell(row=r, column=INTEREST_COL,
+                value=f'=IF({pn_cell}<>"",ROUND({bal_ref}*AnnualRate/12,2),"")')
+        ws.cell(row=r, column=INTEREST_COL).number_format = CURRENCY_FMT
 
-        # Col C: Payment — min of monthly payment and (balance + interest)
-        ws.cell(row=r, column=3, value=f'=IF(A{r}<>"",MIN(MonthlyPmt,{bal_ref}+D{r}),"")')
-        ws.cell(row=r, column=3).number_format = CURRENCY_FMT
+        # Payment (min of monthly pmt and balance + interest)
+        ws.cell(row=r, column=PAYMENT_COL,
+                value=f'=IF({pn_cell}<>"",MIN(MonthlyPmt,{bal_ref}+{it_cell}),"")')
+        ws.cell(row=r, column=PAYMENT_COL).number_format = CURRENCY_FMT
 
-        # Col E: Principal = scheduled principal + extra payments, capped at balance
-        # scheduled_principal = C{r} - D{r}
-        # extra = SUMPRODUCT lookups (recurring monthly + recurring annual + one-time)
-        # total = MIN(balance, scheduled_principal + extra)
-        rec_start_range = f"$B${RECURRING_DATA_START}:$B${RECURRING_DATA_END}"
-        rec_amount_range = f"$C${RECURRING_DATA_START}:$C${RECURRING_DATA_END}"
-        rec_freq_range = f"$D${RECURRING_DATA_START}:$D${RECURRING_DATA_END}"
-        ot_date_range = f"$B${ONETIME_DATA_START}:$B${ONETIME_DATA_END}"
-        ot_amount_range = f"$C${ONETIME_DATA_START}:$C${ONETIME_DATA_END}"
+        # Principal = scheduled principal + extra, capped at balance
+        # End date check: (end="" OR date<=end) → ((rec_end="")+(rec_end<>"")*(rec_end>=date))
+        end_date_check = f'(({rec_end_range}="")+({rec_end_range}<>"")*({rec_end_range}>={dt_cell}))'
 
         extra_sum = (
-            # Recurring monthly
-            f'SUMPRODUCT(({rec_start_range}<>"")*({rec_start_range}<=B{r})*({rec_freq_range}="Monthly")*{rec_amount_range})'
+            # Recurring monthly (with end date check)
+            f'SUMPRODUCT(({rec_start_range}<>"")*({rec_start_range}<={dt_cell})*{end_date_check}*({rec_freq_range}="Monthly")*{rec_amount_range})'
             f'+'
-            # Recurring annual (month must match)
-            f'SUMPRODUCT(({rec_start_range}<>"")*({rec_start_range}<=B{r})*({rec_freq_range}="Annual")*(MONTH({rec_start_range})=MONTH(B{r}))*{rec_amount_range})'
+            # Recurring annual (month match + end date check)
+            f'SUMPRODUCT(({rec_start_range}<>"")*({rec_start_range}<={dt_cell})*{end_date_check}*({rec_freq_range}="Annual")*(MONTH({rec_start_range})=MONTH({dt_cell}))*{rec_amount_range})'
             f'+'
             # One-time (year and month match)
-            f'SUMPRODUCT(({ot_date_range}<>"")*(YEAR({ot_date_range})=YEAR(B{r}))*(MONTH({ot_date_range})=MONTH(B{r}))*{ot_amount_range})'
+            f'SUMPRODUCT(({ot_date_range}<>"")*(YEAR({ot_date_range})=YEAR({dt_cell}))*(MONTH({ot_date_range})=MONTH({dt_cell}))*{ot_amount_range})'
         )
 
         principal_formula = (
-            f'=IF(A{r}<>"",'
-            f'MIN({bal_ref},(C{r}-D{r})+{extra_sum}),'
+            f'=IF({pn_cell}<>"",'
+            f'MIN({bal_ref},({pm_cell}-{it_cell})+{extra_sum}),'
             f'"")'
         )
-        ws.cell(row=r, column=5, value=principal_formula)
-        ws.cell(row=r, column=5).number_format = CURRENCY_FMT
+        ws.cell(row=r, column=PRINCIPAL_COL, value=principal_formula)
+        ws.cell(row=r, column=PRINCIPAL_COL).number_format = CURRENCY_FMT
 
-        # Col F: Ending Balance = Beginning Balance - Principal
-        ws.cell(row=r, column=6, value=f'=IF(A{r}<>"",ROUND({bal_ref}-E{r},2),"")')
-        ws.cell(row=r, column=6).number_format = CURRENCY_FMT
+        # Ending Balance
+        ws.cell(row=r, column=END_BAL_COL,
+                value=f'=IF({pn_cell}<>"",ROUND({bal_ref}-{pr_cell},2),"")')
+        ws.cell(row=r, column=END_BAL_COL).number_format = CURRENCY_FMT
 
-        # Light alternate row shading
+        # Alternate row shading
         if idx % 2 == 1:
-            for c in range(1, num_amort_cols + 1):
-                cell = ws.cell(row=r, column=c)
-                cell.fill = PatternFill(start_color="F2F7FB", end_color="F2F7FB", fill_type="solid")
+            for c in range(AC, AC + NUM_AMORT_COLS):
+                ws.cell(row=r, column=c).fill = PatternFill(
+                    start_color="F2F7FB", end_color="F2F7FB", fill_type="solid")
 
-        # Borders for all amortization cells
-        for c in range(1, num_amort_cols + 1):
+        # Borders and alignment
+        for c in range(AC, AC + NUM_AMORT_COLS):
             ws.cell(row=r, column=c).border = THIN_BORDER
             ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
 
     # -----------------------------------------------------------------------
-    # E. SUMMARY SECTION (to the right of inputs, columns E-H)
-    # -----------------------------------------------------------------------
-    sc = SUMMARY_COL  # E
-
-    ws.merge_cells(f"{get_column_letter(sc)}1:{get_column_letter(sc + 2)}1")
-    ws.cell(row=1, column=sc, value="LOAN SUMMARY").font = SECTION_FONT
-
-    summary_items = [
-        (2, "Original Payoff Date"),
-        (3, "Accelerated Payoff Date"),
-        (4, "Accelerated Payoff Time"),
-        (5, "Original Total Interest"),
-        (6, "Accelerated Total Interest"),
-        (7, "Interest Saved"),
-        (8, "Months Saved"),
-        (9, "Total of Payments (P+I)"),
-        (10, "Total Extra Payments"),
-    ]
-    for row_num, label in summary_items:
-        cell = ws.cell(row=row_num, column=sc, value=label)
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="right")
-
-    val_col = sc + 1  # F
-
-    # Original payoff date: StartDate + (TermYears * 12 - 1) months
-    ws.cell(row=2, column=val_col, value='=EDATE(StartDate,TermYears*12-1)')
-    ws.cell(row=2, column=val_col).number_format = DATE_FMT
-
-    # Accelerated payoff date: last non-blank date in amort table
-    ws.cell(row=3, column=val_col,
-            value=f'=LOOKUP(2,1/(B{AMORT_DATA_START}:B{AMORT_DATA_END}<>""),B{AMORT_DATA_START}:B{AMORT_DATA_END})')
-    ws.cell(row=3, column=val_col).number_format = DATE_FMT
-
-    # Accelerated payoff time in years and months
-    # actual_months = count of payment rows with a number
-    # years = INT(actual_months/12), remaining_months = MOD(actual_months,12)
-    actual_months_formula = f'SUMPRODUCT(1*(ISNUMBER(A{AMORT_DATA_START}:A{AMORT_DATA_END})))'
-    ws.cell(row=4, column=val_col,
-            value=f'=INT({actual_months_formula}/12)&" years, "&MOD({actual_months_formula},12)&" months"')
-
-    # Original total interest: PMT * term_months - loan_amount
-    ws.cell(row=5, column=val_col,
-            value='=ROUND(MonthlyPmt*TermYears*12-LoanAmount,2)')
-    ws.cell(row=5, column=val_col).number_format = CURRENCY_FMT
-
-    # Accelerated total interest: sum of interest column (now col D)
-    ws.cell(row=6, column=val_col,
-            value=f'=ROUND(SUM(D{AMORT_DATA_START}:D{AMORT_DATA_END}),2)')
-    ws.cell(row=6, column=val_col).number_format = CURRENCY_FMT
-
-    # Interest saved
-    ws.cell(row=7, column=val_col, value=f'={get_column_letter(val_col)}5-{get_column_letter(val_col)}6')
-    ws.cell(row=7, column=val_col).number_format = CURRENCY_FMT
-    ws.cell(row=7, column=val_col).font = Font(bold=True, color="006600", size=12)
-
-    # Months saved: original months - actual months (count only numeric payment #s)
-    ws.cell(row=8, column=val_col,
-            value=f'=TermYears*12-SUMPRODUCT(1*(ISNUMBER(A{AMORT_DATA_START}:A{AMORT_DATA_END})))')
-    ws.cell(row=8, column=val_col).number_format = NUMBER_FMT
-    ws.cell(row=8, column=val_col).font = Font(bold=True, color="006600", size=12)
-
-    # Total of payments (principal + interest) = sum of payment column (now col C)
-    ws.cell(row=9, column=val_col,
-            value=f'=ROUND(SUM(C{AMORT_DATA_START}:C{AMORT_DATA_END}),2)')
-    ws.cell(row=9, column=val_col).number_format = CURRENCY_FMT
-
-    # Total extra payments = total principal paid - (total payments - total interest)
-    # Extra = Principal (col E) - (Payment (col C) - Interest (col D)) = E_sum - C_sum + D_sum
-    ws.cell(row=10, column=val_col,
-            value=f'=ROUND(SUM(E{AMORT_DATA_START}:E{AMORT_DATA_END})-SUM(C{AMORT_DATA_START}:C{AMORT_DATA_END})+SUM(D{AMORT_DATA_START}:D{AMORT_DATA_END}),2)')
-    ws.cell(row=10, column=val_col).number_format = CURRENCY_FMT
-
-    # Style summary values
-    for row_num in range(2, 11):
-        cell = ws.cell(row=row_num, column=val_col)
-        cell.border = THIN_BORDER
-        cell.alignment = Alignment(horizontal="center")
-
-    # -----------------------------------------------------------------------
     # F. FORMATTING & FINAL TOUCHES
     # -----------------------------------------------------------------------
-
-    # Column widths
     col_widths = {
-        1: 22,  # A - labels / payment #
-        2: 18,  # B - dates / amounts
-        3: 18,  # C - payment / amounts
-        4: 18,  # D - interest / frequency
-        5: 26,  # E - principal / summary labels
-        6: 22,  # F - ending balance / summary values
+        1: 26,   # A - labels
+        2: 18,   # B - values / start dates
+        3: 20,   # C - end dates
+        4: 16,   # D - amounts
+        5: 14,   # E - frequency
+        6: 3,    # F - spacer
+        7: 3,    # G - spacer
+        8: 12,   # H - payment #
+        9: 14,   # I - date
+        10: 16,  # J - payment
+        11: 16,  # K - interest
+        12: 16,  # L - principal
+        13: 18,  # M - ending balance
     }
     for col, width in col_widths.items():
         ws.column_dimensions[get_column_letter(col)].width = width
 
-    # Freeze panes at amortization header
-    ws.freeze_panes = f"A{AMORT_DATA_START}"
-
-    # Conditional formatting: gray out rows where payment # is blank (post-payoff)
-    gray_fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
-    gray_font = Font(color="999999")
+    # Freeze panes: keep amort headers visible when scrolling
+    ws.freeze_panes = f"{ac(AC)}{AMORT_DATA_START}"
 
     return wb, ws
 
@@ -401,9 +409,10 @@ def main():
     wb.save(output_path)
     print(f"✅ Mortgage calculator generated: {output_path}")
     print(f"   Open in Excel and edit the yellow input cells.")
-    print(f"   - Loan inputs: B2–B5")
-    print(f"   - Recurring extra payments: rows {RECURRING_DATA_START}–{RECURRING_DATA_END}")
-    print(f"   - One-time extra payments: rows {ONETIME_DATA_START}–{ONETIME_DATA_END}")
+    print(f"   - Loan details: B2–B5")
+    print(f"   - Recurring extra payments: rows {RECURRING_DATA_START}–{RECURRING_DATA_END} (cols B-E)")
+    print(f"   - One-time extra payments: rows {ONETIME_DATA_START}–{ONETIME_DATA_END} (cols B-C)")
+    print(f"   - Amortization schedule: columns H-M")
 
 
 if __name__ == "__main__":
